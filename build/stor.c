@@ -84,26 +84,142 @@ int main(int argc, char **argv) {
         return invalid();  /* STUB — replace me */
     }
 
+    #define MAX_NAME_LEN 255
+    #define MAX_KEY_LEN 1024
+
+    static int valid_name(const char *s) {
+        size_t n;
+
+        if (!s)
+            return 0;
+
+        n = strlen(s);
+        if (n == 0 || n > MAX_NAME_LEN)
+            return 0;
+
+        if (strcmp(s, ".") == 0 || strcmp(s, "..") == 0)
+            return 0;
+
+        return 1;
+    }
+
+    static int valid_key(const char *k) {
+        size_t n;
+        if (!k)
+            return 0;
+
+        n = strlen(k);
+        if (n == 0 || n > MAX_KEY_LEN)
+            return 0;
+
+        return 1;
+    }
+
     if (strcmp(action, "write") == 0) {
-        /*
-         * TODO: Write content to a file.
-         *  - Requires: -u, -k, -f
-         *  - Content source: -i <inputfile>, or positional arg, or empty string.
-         *  - Verify the user's key before writing.
-         *  - Encrypt the content and store in enc.db.
-         */
-        return invalid();  /* STUB — replace me */
+        int ok = 0;
+        char *plaintext = NULL;
+        size_t len = 0;
+    
+        if (!valid_name(user) || !valid_name(file) || !valid_key(key))
+            return invalid();
+    
+        if (!lock_db("enc.db"))
+            return invalid();
+    
+        if (!load_db("enc.db"))
+            goto cleanup;
+    
+        User *u = find_user(db, user);
+        if (!u || !verify_key_constant_time(u, key))
+            goto cleanup;
+    
+        FileEntry *f = find_file(db, user, file);
+        if (!f)
+            goto cleanup;
+    
+        if (infile) {
+            if (!read_regular_file_limited(infile, &plaintext, &len, MAX_CONTENT_LEN))
+                goto cleanup;
+        } else if (content) {
+            len = strlen(content);
+    
+            if (len > MAX_CONTENT_LEN || len == SIZE_MAX - 1)
+                goto cleanup;
+    
+            plaintext = malloc(len + 1);
+            if (!plaintext)
+                goto cleanup;
+    
+            memcpy(plaintext, content, len + 1);
+        } else {
+            plaintext = strdup("");
+            if (!plaintext)
+                goto cleanup;
+            len = 0;
+        }
+    
+        if (!encrypt_and_store_aead(f, plaintext, len, key))
+            goto cleanup;
+    
+        if (!save_db_atomic("enc.db"))
+            goto cleanup;
+    
+        ok = 1;
+    
+    cleanup:
+        if (plaintext) {
+            secure_bzero(plaintext, len);
+            free(plaintext);
+        }
+    
+        unlock_db("enc.db");
+    
+        return ok ? 0 : invalid();
     }
 
     if (strcmp(action, "read") == 0) {
-        /*
-         * TODO: Read content from a file.
-         *  - Requires: -u, -k, -f
-         *  - Verify the user's key.
-         *  - Decrypt the content.
-         *  - Output to: -o <outputfile>, or stdout.
-         */
-        return invalid();  /* STUB — replace me */
+        int ok = 0;
+        char *plaintext = NULL;
+        size_t len = 0;
+
+        if (!valid_name(user) || !valid_name(file) || !valid_key(key))
+            return invalid();
+
+        if (!lock_db("enc.db"))
+            return invalid();
+
+        if (!load_db("enc.db"))
+            goto read_cleanup;
+
+        User *u = find_user(db, user);
+        if (!u || !verify_key_constant_time(u, key))
+            goto read_cleanup;
+
+        FileEntry *f = find_file(db, user, file);
+        if (!f)
+            goto read_cleanup;
+
+        if (!decrypt_and_load_aead(f, key, &plaintext, &len))
+            goto read_cleanup;
+
+        if (outfile) {
+            if (!write_regular_file(outfile, plaintext, len))
+                goto read_cleanup;
+        } else if (len > 0 && fwrite(plaintext, 1, len, stdout) != len) {
+            goto read_cleanup;
+        }
+
+        ok = 1;
+
+    read_cleanup:
+        if (plaintext) {
+            secure_bzero(plaintext, len);
+            free(plaintext);
+        }
+
+        unlock_db("enc.db");
+
+        return ok ? 0 : invalid();
     }
 
     return invalid();
