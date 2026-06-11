@@ -84,45 +84,31 @@ int main(int argc, char **argv) {
         return invalid();  /* STUB — replace me */
     }
 
-    #define MAX_NAME_LEN 255
-    #define MAX_KEY_LEN 1024
-
-    static int valid_name(const char *s) {
-        size_t n;
-
-        if (!s)
-            return 0;
-
-        n = strlen(s);
-        if (n == 0 || n > MAX_NAME_LEN)
-            return 0;
-
-        if (strcmp(s, ".") == 0 || strcmp(s, "..") == 0)
-            return 0;
-
-        return 1;
-    }
-
-    static int valid_key(const char *k) {
-        size_t n;
-        if (!k)
-            return 0;
-
-        n = strlen(k);
-        if (n == 0 || n > MAX_KEY_LEN)
-            return 0;
-
-        return 1;
-    }
-
     if (strcmp(action, "write") == 0) {
         int ok = 0;
         char *plaintext = NULL;
         size_t len = 0;
-    
-        if (!valid_name(user) || !valid_name(file) || !valid_key(key))
+        size_t user_len, file_len, key_len;
+
+        if (!key || !file)
             return invalid();
-    
+
+        user_len = strlen(user);
+        if (user_len == 0 || user_len > 255)
+            return invalid();
+        if (strcmp(user, ".") == 0 || strcmp(user, "..") == 0)
+            return invalid();
+
+        file_len = strlen(file);
+        if (file_len == 0 || file_len > 255)
+            return invalid();
+        if (strcmp(file, ".") == 0 || strcmp(file, "..") == 0)
+            return invalid();
+
+        key_len = strlen(key);
+        if (key_len == 0 || key_len > 1024)
+            return invalid();
+
         if (!lock_db("enc.db"))
             return invalid();
     
@@ -181,8 +167,25 @@ int main(int argc, char **argv) {
         int ok = 0;
         char *plaintext = NULL;
         size_t len = 0;
+        size_t user_len, file_len, key_len;
 
-        if (!valid_name(user) || !valid_name(file) || !valid_key(key))
+        if (!key || !file)
+            return invalid();
+
+        user_len = strlen(user);
+        if (user_len == 0 || user_len > 255)
+            return invalid();
+        if (strcmp(user, ".") == 0 || strcmp(user, "..") == 0)
+            return invalid();
+
+        file_len = strlen(file);
+        if (file_len == 0 || file_len > 255)
+            return invalid();
+        if (strcmp(file, ".") == 0 || strcmp(file, "..") == 0)
+            return invalid();
+
+        key_len = strlen(key);
+        if (key_len == 0 || key_len > 1024)
             return invalid();
 
         if (!lock_db("enc.db"))
